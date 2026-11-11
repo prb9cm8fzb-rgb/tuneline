@@ -24,43 +24,62 @@ import { validSpotifyToken } from './spotifyAuth'
 let player: NonNullable<Window['Spotify']>['Player'] extends new (...args: never[]) => infer T ? T | null : never = null
 let ready = false
 let currentDeviceId: string | null = null
+let sdkPromise: Promise<void> | null = null
+let initializationPromise: Promise<void> | null = null
 
-export async function initializeSpotifyPlayer(): Promise<void> {
-  if (ready) return
-  await new Promise<void>((resolve, reject) => {
-    if (window.Spotify) return resolve()
+function loadSpotifySdk(): Promise<void> {
+  if (window.Spotify) return Promise.resolve()
+  if (sdkPromise) return sdkPromise
+  sdkPromise = new Promise<void>((resolve, reject) => {
     const script = document.createElement('script')
     script.src = 'https://sdk.scdn.co/spotify-player.js'
-    script.onerror = () => reject(new Error('Could not load the Spotify playback SDK.'))
+    script.onerror = () => {
+      sdkPromise = null
+      reject(new Error('Could not load the Spotify playback SDK.'))
+    }
     window.onSpotifyWebPlaybackSDKReady = () => resolve()
     document.head.append(script)
   })
-  const Spotify = window.Spotify
-  if (!Spotify) throw new Error('Spotify playback SDK did not initialize.')
-  player = new Spotify.Player({
-    name: 'TuneLine',
-    getOAuthToken: (callback) => { void validSpotifyToken().then(callback) },
-    volume: 0.8,
+  return sdkPromise
+}
+
+export function initializeSpotifyPlayer(): Promise<void> {
+  if (ready && player && currentDeviceId) return Promise.resolve()
+  if (initializationPromise) return initializationPromise
+  initializationPromise = (async () => {
+    await loadSpotifySdk()
+    const Spotify = window.Spotify
+    if (!Spotify) throw new Error('Spotify playback SDK did not initialize.')
+    player = new Spotify.Player({
+      name: 'TuneLine',
+      getOAuthToken: (callback) => { void validSpotifyToken().then(callback) },
+      volume: 0.8,
+    })
+    player.addListener('ready', ({ device_id }) => { currentDeviceId = device_id ?? null })
+    const connected = await player.connect()
+    if (!connected) throw new Error('Spotify could not connect to this device.')
+    await new Promise<void>((resolve) => {
+      const started = Date.now()
+      const wait = () => {
+        if (currentDeviceId || Date.now() - started > 8_000) return resolve()
+        window.setTimeout(wait, 100)
+      }
+      wait()
+    })
+    if (!currentDeviceId) throw new Error('Spotify did not provide a playback device.')
+    ready = true
+  })().finally(() => {
+    if (!ready || !currentDeviceId) initializationPromise = null
   })
-  player.addListener('ready', ({ device_id }) => { currentDeviceId = device_id ?? null })
-  const connected = await player.connect()
-  if (!connected) throw new Error('Spotify could not connect to this device.')
-  ready = true
-  await new Promise<void>((resolve) => {
-    const started = Date.now()
-    const wait = () => {
-      if (currentDeviceId || Date.now() - started > 8_000) return resolve()
-      window.setTimeout(wait, 100)
-    }
-    wait()
-  })
-  if (!currentDeviceId) throw new Error('Spotify did not provide a playback device.')
+  return initializationPromise
 }
 
 export async function playSpotifyFragment(uri: string, startMs: number, durationSeconds: number) {
+  const activation = player?.activateElement()
   await initializeSpotifyPlayer()
   if (!player || !currentDeviceId) throw new Error('Spotify player is not ready.')
-  await player.activateElement()
+  if (activation) await activation
+  else await player.activateElement()
   const token = await validSpotifyToken()
   const transfer = await fetch('https://api.spotify.com/v1/me/player', {
     method: 'PUT',

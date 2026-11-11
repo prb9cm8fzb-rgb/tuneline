@@ -9,7 +9,7 @@ import {
 import { db } from './services/database'
 import { completeSpotifyAuth, connectSpotify, getSpotifyToken, spotifyConfigured } from './services/spotifyAuth'
 import { getPlaylistSongs, getPlaylists, type SpotifyPlaylist } from './services/spotifyApi'
-import { pauseSpotify, playSpotifyFragment } from './services/spotifyPlayer'
+import { initializeSpotifyPlayer, pauseSpotify, playSpotifyFragment } from './services/spotifyPlayer'
 import AppHeader from './components/AppHeader'
 import Scoreboard from './components/Scoreboard'
 import HomeScreen from './screens/HomeScreen'
@@ -137,6 +137,8 @@ export default function App() {
   useEffect(() => {
     if (game?.phase !== 'music' || !spotifyConnected) return
     setLoadingPlaylists(true)
+    void initializeSpotifyPlayer()
+      .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : 'Spotify player could not be initialized.'))
     void getPlaylists()
       .then(setPlaylists)
       .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : 'Could not load Spotify playlists.'))
