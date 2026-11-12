@@ -31,8 +31,19 @@ export function spotifyConfigured() {
 }
 
 export function getSpotifyToken(): SpotifyToken | null {
-  const value = sessionStorage.getItem(tokenKey)
-  return value ? JSON.parse(value) as SpotifyToken : null
+  const savedToken = localStorage.getItem(tokenKey)
+  if (savedToken) return JSON.parse(savedToken) as SpotifyToken
+
+  const sessionToken = sessionStorage.getItem(tokenKey)
+  if (!sessionToken) return null
+  localStorage.setItem(tokenKey, sessionToken)
+  sessionStorage.removeItem(tokenKey)
+  return JSON.parse(sessionToken) as SpotifyToken
+}
+
+function saveSpotifyToken(token: SpotifyToken) {
+  localStorage.setItem(tokenKey, JSON.stringify(token))
+  sessionStorage.removeItem(tokenKey)
 }
 
 export async function connectSpotify() {
@@ -49,6 +60,7 @@ export async function connectSpotify() {
     code_challenge: await challengeFor(verifier),
     state,
     scope: scopes.join(' '),
+    show_dialog: 'false',
   })
   window.location.assign(`https://accounts.spotify.com/authorize?${params}`)
 }
@@ -77,7 +89,7 @@ export async function completeSpotifyAuth(): Promise<SpotifyToken | null> {
   if (!response.ok) throw new Error(`Spotify token exchange failed (${response.status}).`)
   const data = await response.json() as { access_token: string; refresh_token?: string; expires_in: number }
   const token: SpotifyToken = { access_token: data.access_token, refresh_token: data.refresh_token, expires_at: Date.now() + data.expires_in * 1000 }
-  sessionStorage.setItem(tokenKey, JSON.stringify(token))
+  saveSpotifyToken(token)
   sessionStorage.removeItem(verifierKey)
   sessionStorage.removeItem(stateKey)
   window.history.replaceState({}, '', window.location.pathname)
@@ -98,6 +110,6 @@ export async function validSpotifyToken(): Promise<string> {
   if (!response.ok) throw new Error(`Spotify token refresh failed (${response.status}).`)
   const data = await response.json() as { access_token: string; refresh_token?: string; expires_in: number }
   const updated = { ...token, access_token: data.access_token, refresh_token: data.refresh_token ?? token.refresh_token, expires_at: Date.now() + data.expires_in * 1000 }
-  sessionStorage.setItem(tokenKey, JSON.stringify(updated))
+  saveSpotifyToken(updated)
   return updated.access_token
 }

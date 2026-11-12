@@ -29,7 +29,7 @@ export default function MusicScreen({ game, connected, playlists, selectedPlayli
           <div className="music-option-icon spotify-icon">◖</div>
           <div className="music-option-copy"><span className="option-tag">YOUR MUSIC</span><h3>{connected ? 'Spotify connected' : 'Connect Spotify'}</h3><p>Choose a playlist and TuneLine will deal out {required} unique songs.</p></div>
           {!connected ? (
-            <div className="spotify-connect"><PrimaryButton variant="secondary" onClick={onConnect}>CONNECT SPOTIFY</PrimaryButton>{!configured && <small>{configurationHelp}</small>}</div>
+            <div className="spotify-connect"><PrimaryButton variant="secondary" onClick={onConnect}>CONNECT SPOTIFY</PrimaryButton><small>{configured ? 'Sign in once in this browser. TuneLine remembers this connection on this device.' : configurationHelp}</small></div>
           ) : (
             <div className="playlist-picker">
               {loadingPlaylists ? <span className="loading-label">LOADING PLAYLISTS…</span> : <select value={selectedPlaylist} onChange={(event) => onSelectPlaylist(event.target.value)}><option value="">Choose a playlist</option>{playlists.map((playlist) => <option value={playlist.id} key={playlist.id}>{playlist.name} · {playlist.trackCount} tracks</option>)}</select>}
