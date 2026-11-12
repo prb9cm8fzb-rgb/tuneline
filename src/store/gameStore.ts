@@ -1,8 +1,8 @@
 import type { RoundAnswer, Song, Team, YearTolerance } from '../models/gameTypes'
 
 export const teamColors = [
-  '#EF4444', '#F97316', '#EAB308', '#22C55E',
-  '#06B6D4', '#3B82F6', '#8B5CF6', '#EC4899',
+  '#FF6B55', '#55C7FF', '#B985FF', '#FF77AD',
+  '#F97316', '#EAB308', '#22C55E', '#3B82F6',
 ]
 
 export const demoSongs: Song[] = [

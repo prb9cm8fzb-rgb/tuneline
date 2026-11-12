@@ -14,14 +14,15 @@ export default function LiveTimeline({ songs, answers, teams }: {
     }))
     .filter((card): card is { answer: RoundAnswer; song: Song; team: Team } => Boolean(card.song && card.team))
     .sort((a, b) => a.song.releaseYear - b.song.releaseYear || a.answer.roundNumber - b.answer.roundNumber)
+  const cardCount = earnedCards.length
 
   return (
     <section className="live-timeline" aria-label="Your timeline">
-      <div className="live-timeline-heading"><strong>YOUR TIMELINE</strong><span>{earnedCards.length} cards · +{earnedCards.length} bonus points</span></div>
+      <div className="live-timeline-heading"><strong>YOUR TIMELINE</strong><span>{cardCount} {cardCount === 1 ? 'card' : 'cards'} · +{cardCount} bonus {cardCount === 1 ? 'point' : 'points'}</span></div>
       {earnedCards.length ? (
         <div className="live-timeline-track">
           {earnedCards.map(({ answer, song, team }) => (
-            <article className="live-timeline-card" key={answer.id} style={{ borderColor: team.color }}>
+            <article className="live-timeline-card" key={answer.id} style={{ borderColor: team.color }} aria-label={`${song.title}, ${song.releaseYear}, earned by ${team.player1} and ${team.player2}`}>
               <strong>{song.artist}</strong>
               <span>{song.title}</span>
               <b>{song.releaseYear}</b>

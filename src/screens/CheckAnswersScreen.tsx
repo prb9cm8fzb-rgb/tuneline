@@ -32,11 +32,21 @@ export default function CheckAnswersScreen({ answer, song, team, round, toleranc
     { label: 'Artist', entered: answer.enteredArtist, official: song.artist, correct: answer.completed ? answer.artistCorrect : artistChoice, onChange: onArtistChoice },
     { label: 'Song title', entered: answer.enteredTitle, official: song.title, correct: answer.completed ? answer.titleCorrect : titleChoice, onChange: onTitleChoice },
   ]
+  const resultHeading = !answer.completed
+    ? 'Your answers vs. correct answers'
+    : answer.yearCorrect
+      ? scoreAnswer(answer) === 3 ? 'Nice one!' : 'Timeline card earned!'
+      : 'Not quite.'
+
   return (
-    <div className="stage-content check-content">
+    <div className={`stage-content check-content ${answer.completed ? answer.yearCorrect ? 'check-complete-earned' : 'check-complete-missed' : ''}`}>
       <div className="step-kicker">ROUND {round} · {answer.completed ? 'RESULT' : 'ANSWERS REVEALED'}</div>
-      <h2>{answer.completed ? `${scoreAnswer(answer)}/3 regular points` : 'Your answers vs. correct answers'}</h2>
-      <p className="stage-description">{answer.completed ? 'Your timeline is updated automatically using the official release year.' : 'Compare your answers with the official answers. Mark Artist and Title; TuneLine checks the year automatically.'}</p>
+      <h2>{resultHeading}</h2>
+      <p className="stage-description">{answer.completed
+        ? answer.yearCorrect
+          ? 'Correct year. Timeline card earned.'
+          : `Official year: ${song.releaseYear}. No timeline card earned.`
+        : 'Compare your answers with the official answers. Mark Artist and Title; TuneLine checks the year automatically.'}</p>
       <div className="result-team"><TeamBadge team={team} /></div>
       <div className="comparison-table">
         <div className="comparison-head"><span /><span>YOUR ANSWER</span><span>CORRECT ANSWER</span><span>RESULT</span></div>
@@ -63,7 +73,10 @@ export default function CheckAnswersScreen({ answer, song, team, round, toleranc
             <strong>{answer.yearCorrect ? '🎉 TIMELINE CARD EARNED' : 'NO TIMELINE CARD'}</strong>
             <span>{answer.yearCorrect ? '+1 bonus point' : 'Get the year right to earn a timeline card.'}</span>
           </div>
-          <div className="result-score"><span>ROUND TOTAL</span><strong>{scoreAnswer(answer) + Number(answer.yearCorrect)} <small> / 4 POINTS</small></strong></div>
+          <div className="result-score">
+            <span>ROUND TOTAL<small>{scoreAnswer(answer)}/3 REGULAR + {Number(answer.yearCorrect)} TIMELINE BONUS</small></span>
+            <strong>{scoreAnswer(answer) + Number(answer.yearCorrect)} <small> / 4 POINTS</small></strong>
+          </div>
           <div className="stage-actions"><span className="tolerance-note">{team.player1.toUpperCase()} &amp; {team.player2.toUpperCase()}</span><PrimaryButton onClick={onNext}>{nextLabel} <span>↗</span></PrimaryButton></div>
         </>
       ) : (

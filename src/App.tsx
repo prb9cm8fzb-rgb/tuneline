@@ -410,11 +410,12 @@ export default function App() {
           {game.status === 'playing' && (
             <aside className="game-sidebar">
               <div className="sidebar-heading"><span>GAME BOARD</span><span className="live-dot">LIVE</span></div>
-              <Scoreboard teams={sortedTeams} compact />
+              <div className="sidebar-round"><span>ROUND</span><strong>{game.currentRoundNumber}<small> OF {game.settings.songsPerTeam}</small></strong></div>
+              <Scoreboard teams={sortedTeams} activeTeamId={currentTeam?.id} compact />
               <div className="sidebar-game-info"><span>{game.spotifyPlaylistName ?? 'TuneLine game'}</span><small>{game.settings.songsPerTeam} SONGS PER TEAM</small></div>
             </aside>
           )}
-          <section className={`game-stage ${game.status === 'playing' ? 'game-stage-playing' : 'stage-wide'}`}>
+          <section className={`game-stage ${game.status === 'playing' ? 'game-stage-playing' : 'stage-wide'} ${game.status === 'playing' && game.phase === 'check' ? 'game-stage-playing-result' : ''}`}>
             <div className="game-stage-main">
             {game.phase === 'teams' && (
               <PlayersScreen
