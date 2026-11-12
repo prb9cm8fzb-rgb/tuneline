@@ -25,8 +25,8 @@ export default function PlayersScreen({ teams, onUpdateTeam, onBack, onNext }: {
               ))}
             </div>
             <div className="player-fields">
-              <AnswerField label="PLAYER 1" value={team.player1} placeholder="e.g. Nadia" onChange={(value) => onUpdateTeam(team.id, { player1: value })} />
-              <AnswerField label="PLAYER 2" value={team.player2} placeholder="e.g. Jeroen" onChange={(value) => onUpdateTeam(team.id, { player2: value })} />
+              <AnswerField label="PLAYER 1" value={team.player1} placeholder="e.g. Alex" onChange={(value) => onUpdateTeam(team.id, { player1: value })} />
+              <AnswerField label="PLAYER 2" value={team.player2} placeholder="e.g. Sam" onChange={(value) => onUpdateTeam(team.id, { player2: value })} />
             </div>
           </article>
         })}

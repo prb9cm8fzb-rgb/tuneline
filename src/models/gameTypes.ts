@@ -50,18 +50,11 @@ export interface RoundAnswer {
   completed: boolean
 }
 
-export interface TimelineEntry {
-  songId: string
-  chosenPosition: number
-  correctPosition?: boolean
-}
-
 export interface GameSettings {
   numberOfTeams: number
   songsPerTeam: number
   fragmentDuration: FragmentDuration
   yearTolerance: YearTolerance
-  showScoreboard: boolean
 }
 
 export interface Game {
@@ -75,7 +68,6 @@ export interface Game {
   answers: RoundAnswer[]
   currentTeamIndex: number
   currentRoundNumber: number
-  timelineOrders: Record<string, string[]>
   answerDraft?: {
     teamId: string
     roundNumber: number

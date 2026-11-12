@@ -26,9 +26,6 @@ export const makeDemoSongs = (teams: Team[], songsPerTeam: number): Song[] =>
     }),
   )
 
-export const getCheckingTeamIndex = (playingTeamIndex: number, numberOfTeams: number) =>
-  (playingTeamIndex + 1) % numberOfTeams
-
 export const isYearCorrect = (
   enteredYear: number | undefined,
   actualYear: number,
@@ -40,22 +37,3 @@ export const normalizeAnswer = (value: string) =>
 
 export const scoreAnswer = (answer: RoundAnswer) =>
   Number(answer.artistCorrect) + Number(answer.titleCorrect) + Number(answer.yearCorrect)
-
-export function scoreTimeline(songs: Song[], order: string[]) {
-  const sorted = [...songs].sort((a, b) => a.releaseYear - b.releaseYear)
-  const yearPositions = new Map<number, Set<number>>()
-  sorted.forEach((song, position) => {
-    const positions = yearPositions.get(song.releaseYear) ?? new Set<number>()
-    positions.add(position)
-    yearPositions.set(song.releaseYear, positions)
-  })
-
-  return order.map((songId, chosenPosition) => {
-    const song = songs.find((candidate) => candidate.id === songId)
-    return {
-      songId,
-      chosenPosition,
-      correctPosition: Boolean(song && yearPositions.get(song.releaseYear)?.has(chosenPosition)),
-    }
-  })
-}

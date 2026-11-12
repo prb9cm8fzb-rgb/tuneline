@@ -1,16 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { DragEndEvent } from '@dnd-kit/core'
-import { arrayMove } from '@dnd-kit/sortable'
 import type { Game, GameSettings, RoundAnswer, Song, Team } from './models/gameTypes'
 import {
-  getCheckingTeamIndex, isYearCorrect, makeDemoSongs,
-  scoreAnswer, scoreTimeline, teamColors,
+  isYearCorrect, makeDemoSongs, scoreAnswer, teamColors,
 } from './store/gameStore'
 import { db } from './services/database'
 import { completeSpotifyAuth, connectSpotify, getSpotifyToken, spotifyConfigured } from './services/spotifyAuth'
 import { getPlaylistSongs, getPlaylists, type SpotifyPlaylist } from './services/spotifyApi'
 import { initializeSpotifyPlayer, pauseSpotify, playSpotifyFragment } from './services/spotifyPlayer'
 import AppHeader from './components/AppHeader'
+import LiveTimeline from './components/LiveTimeline'
 import Scoreboard from './components/Scoreboard'
 import HomeScreen from './screens/HomeScreen'
 import GameSetupScreen from './screens/GameSetupScreen'
@@ -19,11 +17,7 @@ import MusicScreen from './screens/MusicScreen'
 import ReadyScreen from './screens/ReadyScreen'
 import ListenScreen from './screens/ListenScreen'
 import AnswerScreen from './screens/AnswerScreen'
-import PassToCheckerScreen from './screens/PassToCheckerScreen'
 import CheckAnswersScreen from './screens/CheckAnswersScreen'
-import RoundResultScreen from './screens/RoundResultScreen'
-import TimelineScreen from './screens/TimelineScreen'
-import TimelineRevealScreen from './screens/TimelineRevealScreen'
 import FinalScoreScreen from './screens/FinalScoreScreen'
 import GameReviewScreen from './screens/GameReviewScreen'
 
@@ -31,8 +25,7 @@ const defaultSettings: GameSettings = {
   numberOfTeams: 2,
   songsPerTeam: 10,
   fragmentDuration: 20,
-  yearTolerance: 1,
-  showScoreboard: true,
+  yearTolerance: 0,
 }
 
 function makeTeams(count: number): Team[] {
@@ -76,7 +69,7 @@ export default function App() {
   const [isPlaying, setIsPlaying] = useState(false)
   const [hasPlayed, setHasPlayed] = useState(false)
   const [secondsLeft, setSecondsLeft] = useState(20)
-  const [checkerChoices, setCheckerChoices] = useState<{ artist: boolean | null; title: boolean | null }>({ artist: null, title: null })
+  const [answerChoices, setAnswerChoices] = useState<{ artist: boolean | null; title: boolean | null }>({ artist: null, title: null })
   const [error, setError] = useState('')
 
   const save = useCallback(async (nextGame: Game) => {
@@ -146,8 +139,6 @@ export default function App() {
   }, [game?.phase, spotifyConnected])
 
   const currentTeam = game?.teams[game.currentTeamIndex]
-  const checkingTeamIndex = game ? getCheckingTeamIndex(game.currentTeamIndex, game.teams.length) : 0
-  const checkingTeam = game?.teams[checkingTeamIndex]
   const activeAnswer = game && currentTeam
     ? game.answers.find((answer) => answer.teamId === currentTeam.id && answer.roundNumber === game.currentRoundNumber)
     : undefined
@@ -156,16 +147,11 @@ export default function App() {
       ? game.songs.find((song) => song.id === activeAnswer.songId)
       : game.songs.find((song) => song.teamId === currentTeam.id && !game.answers.some((answer) => answer.songId === song.id))
     : undefined
-  const answerForResult = game?.answers.at(-1)
-  const timelineOrder = game && currentTeam
-    ? game.timelineOrders[currentTeam.id] ?? game.songs.filter((song) => song.teamId === currentTeam.id).map((song) => song.id)
-    : []
-  const timelinePosition = game ? game.teams.findIndex((team) => team.id === currentTeam?.id) + 1 : 0
   const sortedTeams = useMemo(() => game ? [...game.teams].sort((a, b) => (b.guessingScore + b.timelineScore) - (a.guessingScore + a.timelineScore)) : [], [game])
 
   useEffect(() => {
     if (game?.phase === 'check' && activeAnswer) {
-      setCheckerChoices({
+      setAnswerChoices({
         artist: activeAnswer.artistCorrect ?? null,
         title: activeAnswer.titleCorrect ?? null,
       })
@@ -184,7 +170,6 @@ export default function App() {
       answers: [],
       currentTeamIndex: 0,
       currentRoundNumber: 1,
-      timelineOrders: {},
     }
     await save(initial)
   }
@@ -211,17 +196,12 @@ export default function App() {
       id: `${song.id}-${index}`,
       teamId: game.teams[Math.floor(index / game.settings.songsPerTeam)].id,
     }))
-    const timelines = Object.fromEntries(game.teams.map((team) => [
-      team.id,
-      assignedSongs.filter((song) => song.teamId === team.id).map((song) => song.id),
-    ]))
     await save({
       ...game,
       status: 'playing',
       phase: 'ready',
       songs: assignedSongs,
       answers: [],
-      timelineOrders: timelines,
       currentTeamIndex: 0,
       currentRoundNumber: 1,
       spotifyPlaylistName: demo ? 'Demo tracks' : playlists.find((playlist) => playlist.id === selectedPlaylist)?.name,
@@ -263,33 +243,38 @@ export default function App() {
       roundNumber: game.currentRoundNumber,
       enteredArtist: artist.trim(),
       enteredTitle: title.trim(),
-      enteredYear: year ? Number(year) : undefined,
+      enteredYear: year.trim() ? Number(year.trim()) : undefined,
       score: 0,
       completed: false,
     }
-    await save({ ...game, phase: 'pass', answerDraft: undefined, answers: [...game.answers, answer] })
+    setAnswerChoices({ artist: null, title: null })
+    await save({ ...game, phase: 'check', answerDraft: undefined, answers: [...game.answers, answer] })
   }
 
   const finishCheck = async () => {
-    if (!game || !activeAnswer || !activeSong || !checkingTeam) return
-    if (checkerChoices.artist === null || checkerChoices.title === null) {
+    if (!game || !activeAnswer || !activeSong || !currentTeam) return
+    if (activeAnswer.completed) return
+    if (answerChoices.artist === null || answerChoices.title === null) {
       setError('Mark both the artist and song title as correct or wrong.')
       return
     }
     const updatedAnswer: RoundAnswer = {
       ...activeAnswer,
-      artistCorrect: checkerChoices.artist,
-      titleCorrect: checkerChoices.title,
+      artistCorrect: answerChoices.artist,
+      titleCorrect: answerChoices.title,
       yearCorrect: isYearCorrect(activeAnswer.enteredYear, activeSong.releaseYear, game.settings.yearTolerance),
-      checkedByTeamId: game.teams.length > 1 ? checkingTeam.id : undefined,
       completed: true,
     }
     updatedAnswer.score = scoreAnswer(updatedAnswer)
     const updatedAnswers = game.answers.map((answer) => answer.id === updatedAnswer.id ? updatedAnswer : answer)
     const updatedTeams = game.teams.map((team) => team.id === updatedAnswer.teamId
-      ? { ...team, guessingScore: team.guessingScore + updatedAnswer.score }
+      ? {
+          ...team,
+          guessingScore: team.guessingScore + updatedAnswer.score,
+          timelineScore: team.timelineScore + Number(updatedAnswer.yearCorrect),
+        }
       : team)
-    await save({ ...game, phase: 'roundResult', answers: updatedAnswers, teams: updatedTeams })
+    await save({ ...game, answers: updatedAnswers, teams: updatedTeams })
   }
 
   const nextRound = async () => {
@@ -302,34 +287,7 @@ export default function App() {
       await save({ ...game, phase: 'ready', currentTeamIndex: 0, currentRoundNumber: game.currentRoundNumber + 1 })
       return
     }
-    await save({ ...game, status: 'timeline', phase: 'timeline', currentTeamIndex: 0 })
-  }
-
-  const changeTimelineOrder = (event: DragEndEvent) => {
-    if (!game || !currentTeam || !event.over || event.active.id === event.over.id) return
-    const oldIndex = timelineOrder.indexOf(String(event.active.id))
-    const newIndex = timelineOrder.indexOf(String(event.over.id))
-    if (oldIndex < 0 || newIndex < 0) return
-    const nextOrder = arrayMove(timelineOrder, oldIndex, newIndex)
-    void save({ ...game, timelineOrders: { ...game.timelineOrders, [currentTeam.id]: nextOrder } })
-  }
-
-  const lockTimeline = async () => {
-    if (!game || !currentTeam) return
-    const teamSongs = game.songs.filter((song) => song.teamId === currentTeam.id)
-    const scored = scoreTimeline(teamSongs, timelineOrder)
-    const score = scored.filter((entry) => entry.correctPosition).length
-    const updatedTeams = game.teams.map((team) => team.id === currentTeam.id ? { ...team, timelineScore: score } : team)
-    if (game.currentTeamIndex + 1 < game.teams.length) {
-      await save({ ...game, teams: updatedTeams, phase: 'timelineReveal', currentTeamIndex: game.currentTeamIndex })
-    } else {
-      await save({ ...game, teams: updatedTeams, status: 'finished', phase: 'finished' })
-    }
-  }
-
-  const continueTimeline = async () => {
-    if (!game || game.currentTeamIndex + 1 >= game.teams.length) return
-    await save({ ...game, phase: 'timeline', currentTeamIndex: game.currentTeamIndex + 1 })
+    await save({ ...game, status: 'finished', phase: 'finished' })
   }
 
   const loadPlaylist = async (playlistId: string) => {
@@ -347,11 +305,9 @@ export default function App() {
     }
   }
 
-  const step = game?.phase === 'listen' || game?.phase === 'answer' || game?.phase === 'pass' || game?.phase === 'check' || game?.phase === 'roundResult'
+  const step = game?.phase === 'listen' || game?.phase === 'answer' || game?.phase === 'check'
     ? `ROUND ${game.currentRoundNumber} / ${game.settings.songsPerTeam}`
-    : game?.phase === 'timeline' || game?.phase === 'timelineReveal'
-      ? `TIMELINE ${timelinePosition} / ${game.teams.length}`
-      : undefined
+    : undefined
 
   return (
     <div className="app-shell">
@@ -363,22 +319,30 @@ export default function App() {
           onStart={() => { setError(''); void startSetup() }}
           onContinue={() => {
             const latestGame = unfinishedGames[0]
-            gameRef.current = latestGame
-            setGame(latestGame)
-            setDraftSettings(latestGame.settings)
+            const resumeGame: Game = latestGame.phase === 'timeline' || latestGame.phase === 'timelineReveal' || latestGame.status === 'timeline'
+              ? { ...latestGame, status: 'finished', phase: 'finished' }
+              : latestGame.phase === 'pass'
+                ? { ...latestGame, phase: 'check' }
+                : latestGame.phase === 'roundResult'
+                  ? { ...latestGame, phase: 'check' }
+                : latestGame
+            gameRef.current = resumeGame
+            setGame(resumeGame)
+            setDraftSettings(resumeGame.settings)
             setError('')
           }}
         />
       ) : (
         <main className="game-layout">
-          {game.settings.showScoreboard && game.phase !== 'setup' && game.phase !== 'teams' && game.phase !== 'music' && game.phase !== 'ready' && (
+          {game.status === 'playing' && (
             <aside className="game-sidebar">
               <div className="sidebar-heading"><span>GAME BOARD</span><span className="live-dot">LIVE</span></div>
               <Scoreboard teams={sortedTeams} compact />
               <div className="sidebar-game-info"><span>{game.spotifyPlaylistName ?? 'TuneLine game'}</span><small>{game.settings.songsPerTeam} SONGS PER TEAM</small></div>
             </aside>
           )}
-          <section className={`game-stage ${game.settings.showScoreboard && !['setup', 'teams', 'music', 'ready'].includes(game.phase) ? '' : 'stage-wide'}`}>
+          <section className={`game-stage ${game.status === 'playing' ? 'game-stage-playing' : 'stage-wide'}`}>
+            <div className="game-stage-main">
             {game.phase === 'teams' && (
               <PlayersScreen
                 teams={game.teams}
@@ -410,7 +374,6 @@ export default function App() {
             {game.phase === 'ready' && currentTeam && (
               <ReadyScreen
                 team={currentTeam}
-                checker={game.teams.length > 1 ? checkingTeam : undefined}
                 round={game.currentRoundNumber}
                 total={game.settings.songsPerTeam}
                 duration={game.settings.fragmentDuration}
@@ -420,7 +383,6 @@ export default function App() {
             {game.phase === 'listen' && currentTeam && (
               <ListenScreen
                 team={currentTeam}
-                checker={game.teams.length > 1 ? checkingTeam : undefined}
                 round={game.currentRoundNumber}
                 total={game.settings.songsPerTeam}
                 duration={game.settings.fragmentDuration}
@@ -442,56 +404,37 @@ export default function App() {
                 total={game.settings.songsPerTeam}
               />
             )}
-            {game.phase === 'pass' && checkingTeam && (
-              <PassToCheckerScreen
-                team={game.teams.length > 1 ? checkingTeam : undefined}
-                externalChecker={game.teams.length === 1}
-                onStart={() => { setCheckerChoices({ artist: null, title: null }); updateGame((current) => ({ ...current, phase: 'check' })) }}
-              />
-            )}
-            {game.phase === 'check' && activeAnswer && activeSong && (
+            {game.phase === 'check' && activeAnswer && activeSong && currentTeam && (
               <CheckAnswersScreen
                 answer={activeAnswer}
                 song={activeSong}
+                team={currentTeam}
                 round={game.currentRoundNumber}
                 tolerance={game.settings.yearTolerance}
-                artistChoice={checkerChoices.artist}
-                titleChoice={checkerChoices.title}
-                onArtistChoice={(value) => { setCheckerChoices((choices) => ({ ...choices, artist: value })); updateGame((current) => ({ ...current, answers: current.answers.map((answer) => answer.id === activeAnswer.id ? { ...answer, artistCorrect: value } : answer) })) }}
-                onTitleChoice={(value) => { setCheckerChoices((choices) => ({ ...choices, title: value })); updateGame((current) => ({ ...current, answers: current.answers.map((answer) => answer.id === activeAnswer.id ? { ...answer, titleCorrect: value } : answer) })) }}
+                nextLabel={game.currentRoundNumber === game.settings.songsPerTeam && game.currentTeamIndex === game.teams.length - 1
+                  ? 'GAME OVER'
+                  : game.currentTeamIndex + 1 < game.teams.length ? 'NEXT TEAM' : 'NEXT ROUND'}
+                artistChoice={answerChoices.artist}
+                titleChoice={answerChoices.title}
+                onArtistChoice={(value) => { setAnswerChoices((choices) => ({ ...choices, artist: value })); updateGame((current) => ({ ...current, answers: current.answers.map((answer) => answer.id === activeAnswer.id ? { ...answer, artistCorrect: value } : answer) })) }}
+                onTitleChoice={(value) => { setAnswerChoices((choices) => ({ ...choices, title: value })); updateGame((current) => ({ ...current, answers: current.answers.map((answer) => answer.id === activeAnswer.id ? { ...answer, titleCorrect: value } : answer) })) }}
                 onLock={() => void finishCheck()}
-              />
-            )}
-            {game.phase === 'roundResult' && answerForResult && (
-              <RoundResultScreen
-                answer={answerForResult}
-                playerName={currentTeam?.player1 ?? ''}
-                finalRound={game.currentRoundNumber === game.settings.songsPerTeam && game.currentTeamIndex === game.teams.length - 1}
                 onNext={() => void nextRound()}
               />
-            )}
-            {game.phase === 'timeline' && currentTeam && (
-              <TimelineScreen
-                team={currentTeam}
-                roundCount={timelinePosition}
-                order={timelineOrder}
-                songs={game.songs.filter((song) => song.teamId === currentTeam.id)}
-                answers={game.answers}
-                onReorder={changeTimelineOrder}
-                onLock={() => void lockTimeline()}
-              />
-            )}
-            {game.phase === 'timelineReveal' && currentTeam && (
-              <TimelineRevealScreen game={game} team={currentTeam} onContinue={() => void continueTimeline()} />
             )}
             {game.phase === 'finished' && (
               <FinalScoreScreen
                 teams={sortedTeams}
+                songsPerTeam={game.settings.songsPerTeam}
                 onReview={() => updateGame((current) => ({ ...current, phase: 'review' }))}
                 onPlayAgain={() => { gameRef.current = null; setGame(null); setDraftSettings(defaultSettings); setError('') }}
               />
             )}
             {game.phase === 'review' && <GameReviewScreen game={game} onBack={() => updateGame((current) => ({ ...current, phase: 'finished' }))} />}
+            </div>
+            {game.status === 'playing' && ['ready', 'listen', 'answer', 'check'].includes(game.phase) && (
+              <LiveTimeline songs={game.songs} answers={game.answers} teams={game.teams} />
+            )}
           </section>
           {game.phase === 'setup' && <GameSetupScreen
             settings={draftSettings}

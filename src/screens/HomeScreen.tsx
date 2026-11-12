@@ -11,7 +11,7 @@ export default function HomeScreen({ canContinue, onStart, onContinue }: {
         <section className="home-copy">
           <p className="eyebrow"><span className="live-dot" /> THE MUSIC TIMELINE GAME</p>
           <h1>Hear it.<br /><span>Name it.</span><br />Place it.</h1>
-          <p className="home-description">A little music knowledge. A lot of good memories. Take turns guessing the song, then put every track in its place in time.</p>
+          <p className="home-description">A little music knowledge. A lot of good memories. Take turns naming each track; TuneLine checks your answers and grows a shared timeline.</p>
           <div className="home-actions">
             <PrimaryButton onClick={onStart}>START A NEW GAME <span>↗</span></PrimaryButton>
             {canContinue && <PrimaryButton variant="secondary" onClick={onContinue}>CONTINUE GAME <span>↗</span></PrimaryButton>}
