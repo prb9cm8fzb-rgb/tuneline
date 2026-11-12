@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { SpotifyPlaylist } from '../services/spotifyApi'
 import PrimaryButton from '../components/PrimaryButton'
 import type { Game } from '../models/gameTypes'
@@ -19,6 +20,7 @@ export default function MusicScreen({ game, connected, playlists, selectedPlayli
   onBack: () => void
 }) {
   const required = game.settings.numberOfTeams * game.settings.songsPerTeam
+  const [playlistInfoOpen, setPlaylistInfoOpen] = useState(false)
   return (
     <div className="stage-content music-content">
       <div className="step-kicker">02 / MUSIC SOURCE</div>
@@ -27,13 +29,36 @@ export default function MusicScreen({ game, connected, playlists, selectedPlayli
       <div className="music-options">
         <article className="music-option spotify-option">
           <div className="music-option-icon spotify-icon">◖</div>
-          <div className="music-option-copy"><span className="option-tag">YOUR MUSIC</span><h3>{connected ? 'Spotify connected' : 'Connect Spotify'}</h3><p>Choose a playlist and TuneLine will deal out {required} unique songs.</p></div>
+          <div className="music-option-copy">
+            <span className="option-tag">YOUR MUSIC</span>
+            <div className="music-title-row">
+              <h3>{connected ? 'Spotify connected' : 'Connect Spotify'}</h3>
+              <button
+                type="button"
+                className="playlist-info-button"
+                aria-label="Which Spotify playlists can I use?"
+                aria-expanded={playlistInfoOpen}
+                aria-controls="spotify-playlist-info"
+                onClick={() => setPlaylistInfoOpen((open) => !open)}
+              >
+                i
+              </button>
+            </div>
+            <p>Choose a playlist and TuneLine will deal out {required} unique songs.</p>
+            {playlistInfoOpen && (
+              <aside className="playlist-info" id="spotify-playlist-info" aria-labelledby="spotify-playlist-info-title">
+                <strong id="spotify-playlist-info-title">Which playlists can I use?</strong>
+                <p>Choose a playlist you own or can edit as a collaborator. A public playlist you only follow or save is not accessible.</p>
+                <p>You need at least {required} usable tracks. TuneLine skips tracks without readable song details or a release year.</p>
+                <button type="button" className="playlist-info-close" onClick={() => setPlaylistInfoOpen(false)}>CLOSE</button>
+              </aside>
+            )}
+          </div>
           {!connected ? (
             <div className="spotify-connect"><PrimaryButton variant="secondary" onClick={onConnect}>CONNECT SPOTIFY</PrimaryButton><small>{configured ? 'Sign in once in this browser. TuneLine remembers this connection on this device.' : configurationHelp}</small></div>
           ) : (
             <div className="playlist-picker">
               {loadingPlaylists ? <span className="loading-label">LOADING PLAYLISTS…</span> : <select value={selectedPlaylist} onChange={(event) => onSelectPlaylist(event.target.value)}><option value="">Choose a playlist</option>{playlists.map((playlist) => <option value={playlist.id} key={playlist.id}>{playlist.name} · {playlist.trackCount} tracks</option>)}</select>}
-              <small className="playlist-permission-note">TuneLine can load playlists you own or can edit with the owner. Followed public playlists are not accessible.</small>
               {selectedPlaylist && <span className="track-count">{loadingSongs ? 'Loading tracks…' : `${trackCount} usable tracks`} · {required} needed</span>}
               <PrimaryButton disabled={!selectedPlaylist || loadingSongs || trackCount < required} onClick={onSpotifyStart}>DEAL THE TRACKS <span>↗</span></PrimaryButton>
             </div>

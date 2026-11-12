@@ -163,11 +163,17 @@
 .spotify-icon { background: #1ed760; color: #111; font-size: 25px; font-weight: 800; }
 .demo-icon { color: var(--lime); background: rgba(196,244,90,.1); }
 .music-option-copy .option-tag { color: var(--muted); font-size: 7px; }
-.music-option-copy h3 { font-size: 15px; font-weight: 600; margin: 5px 0; }
+.music-title-row { display: flex; align-items: center; gap: 8px; }
+.music-title-row h3 { font-size: 15px; font-weight: 600; margin: 5px 0; }
 .music-option-copy p { font-size: 10px; line-height: 1.6; color: var(--muted); max-width: 360px; }
+.playlist-info-button { width: 19px; height: 19px; padding: 0; border: 1px solid var(--muted); border-radius: 50%; background: transparent; color: var(--paper); font-family: Georgia, serif; font-size: 12px; font-style: italic; line-height: 1; cursor: pointer; }
+.playlist-info-button:hover, .playlist-info-button[aria-expanded="true"] { border-color: var(--lime); color: var(--lime); }
+.playlist-info { margin-top: 10px; padding: 11px 12px; border-left: 2px solid var(--lime); background: rgba(196,244,90,.05); }
+.playlist-info > strong { color: var(--paper); font-size: 10px; }
+.playlist-info p { margin: 6px 0 0; font-size: 9px; line-height: 1.55; }
+.playlist-info-close { display: block; margin: 8px 0 0 auto; border: 0; background: transparent; color: var(--lime); font-size: 7px; letter-spacing: 1px; font-weight: 800; cursor: pointer; }
 .music-option > .button { font-size: 8px; }
 .playlist-picker { min-width: 210px; display: grid; gap: 8px; }
-.playlist-permission-note { max-width: 320px; color: var(--muted); font-size: 8px; line-height: 1.5; }
 .spotify-connect { display: grid; justify-items: end; gap: 8px; }
 .spotify-connect small { color: var(--muted); font-size: 8px; text-align: right; }
 .spotify-connect code { color: var(--lime); font-family: ui-monospace, monospace; }
