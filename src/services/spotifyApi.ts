@@ -8,12 +8,22 @@ export interface SpotifyPlaylist {
   trackCount: number
 }
 
+class SpotifyRequestError extends Error {
+  readonly status: number
+
+  constructor(status: number) {
+    super(`Spotify request failed (${status}).`)
+    this.name = 'SpotifyRequestError'
+    this.status = status
+  }
+}
+
 async function spotifyFetch<T>(path: string): Promise<T> {
   const token = await validSpotifyToken()
   const response = await fetch(`https://api.spotify.com/v1${path}`, {
     headers: { Authorization: `Bearer ${token}` },
   })
-  if (!response.ok) throw new Error(`Spotify request failed (${response.status}).`)
+  if (!response.ok) throw new SpotifyRequestError(response.status)
   return response.json() as Promise<T>
 }
 
@@ -40,7 +50,7 @@ export async function getPlaylistSongs(playlistId: string): Promise<Song[]> {
   const result: Song[] = []
   let path: string | null = `/playlists/${encodeURIComponent(playlistId)}/items?limit=50&fields=items(item(type,id,uri,name,artists(name),album(release_date))),next`
   while (path) {
-    const page: {
+    let page: {
       items: Array<{
         item?: null | {
           type?: string
@@ -59,8 +69,15 @@ export async function getPlaylistSongs(playlistId: string): Promise<Song[]> {
         }
       }>
       next: string | null
-    } =
-      await spotifyFetch(path.replace('https://api.spotify.com/v1', ''))
+    }
+    try {
+      page = await spotifyFetch(path.replace('https://api.spotify.com/v1', ''))
+    } catch (error) {
+      if (error instanceof SpotifyRequestError && error.status === 403) {
+        throw new Error('Spotify only lets TuneLine load playlists you own or can edit with the owner. Copy this playlist to one you own, or choose another playlist.')
+      }
+      throw error
+    }
     for (const playlistItem of page.items) {
       const track = playlistItem.item ?? playlistItem.track
       if (!track?.id || !track.uri || !track.name || !track.artists?.[0]?.name) continue

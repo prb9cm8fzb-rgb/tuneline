@@ -33,6 +33,7 @@ export default function MusicScreen({ game, connected, playlists, selectedPlayli
           ) : (
             <div className="playlist-picker">
               {loadingPlaylists ? <span className="loading-label">LOADING PLAYLISTS…</span> : <select value={selectedPlaylist} onChange={(event) => onSelectPlaylist(event.target.value)}><option value="">Choose a playlist</option>{playlists.map((playlist) => <option value={playlist.id} key={playlist.id}>{playlist.name} · {playlist.trackCount} tracks</option>)}</select>}
+              <small className="playlist-permission-note">TuneLine can load playlists you own or can edit with the owner. Followed public playlists are not accessible.</small>
               {selectedPlaylist && <span className="track-count">{loadingSongs ? 'Loading tracks…' : `${trackCount} usable tracks`} · {required} needed</span>}
               <PrimaryButton disabled={!selectedPlaylist || loadingSongs || trackCount < required} onClick={onSpotifyStart}>DEAL THE TRACKS <span>↗</span></PrimaryButton>
             </div>
