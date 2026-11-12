@@ -58,6 +58,7 @@ export default function App() {
   const [game, setGame] = useState<Game | null>(null)
   const gameRef = useRef<Game | null>(null)
   const writesRef = useRef<Promise<unknown>>(Promise.resolve())
+  const gameActionRef = useRef(false)
   const [draftSettings, setDraftSettings] = useState<GameSettings>(defaultSettings)
   const [unfinishedGames, setUnfinishedGames] = useState<Game[]>([])
   const [spotifyConnected, setSpotifyConnected] = useState(Boolean(getSpotifyToken()))
@@ -311,13 +312,79 @@ export default function App() {
     }
   }
 
+  const pauseGame = async () => {
+    if (gameActionRef.current) return
+    const current = gameRef.current
+    if (!current || current.status === 'finished') return
+    gameActionRef.current = true
+    try {
+      setIsPlaying(false)
+      setHasPlayed(false)
+      setSecondsLeft(current.settings.fragmentDuration)
+      setPlaybackNotice('')
+      let playbackError = ''
+      try {
+        await pauseSpotify()
+      } catch (reason) {
+        playbackError = reason instanceof Error ? `Spotify could not be paused: ${reason.message}` : 'Spotify could not be paused.'
+      }
+      await writesRef.current
+      await db.games.put(current)
+      setUnfinishedGames((games) => [current, ...games.filter((saved) => saved.id !== current.id && saved.status !== 'finished')]
+        .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)))
+      gameRef.current = null
+      setGame(null)
+      setError(playbackError)
+    } catch (reason) {
+      setError(reason instanceof Error ? `Could not save this game before pausing: ${reason.message}` : 'Could not save this game before pausing.')
+    } finally {
+      gameActionRef.current = false
+    }
+  }
+
+  const abandonGame = async () => {
+    if (gameActionRef.current) return
+    const current = gameRef.current
+    if (!current || current.status === 'finished') return
+    const confirmed = window.confirm('Abandon this game?\n\nThis will permanently delete it from this device. You will not be able to resume it later.')
+    if (!confirmed) return
+    gameActionRef.current = true
+    try {
+      setIsPlaying(false)
+      let playbackError = ''
+      try {
+        await pauseSpotify()
+      } catch (reason) {
+        playbackError = reason instanceof Error ? `The game will be deleted, but Spotify could not be paused: ${reason.message}` : 'The game will be deleted, but Spotify could not be paused.'
+      }
+      await writesRef.current
+      await db.games.delete(current.id)
+      setUnfinishedGames((games) => games.filter((saved) => saved.id !== current.id))
+      gameRef.current = null
+      setGame(null)
+      setError(playbackError)
+    } catch (reason) {
+      setError(reason instanceof Error ? `Could not delete this game: ${reason.message}` : 'Could not delete this game.')
+    } finally {
+      gameActionRef.current = false
+    }
+  }
+
   const step = game?.phase === 'listen' || game?.phase === 'answer' || game?.phase === 'check'
     ? `ROUND ${game.currentRoundNumber} / ${game.settings.songsPerTeam}`
     : undefined
 
   return (
     <div className="app-shell">
-      <AppHeader step={step} onHome={() => { gameRef.current = null; setGame(null); setError('') }} />
+      <AppHeader
+        step={step}
+        onHome={() => {
+          if (gameRef.current && gameRef.current.status !== 'finished') void pauseGame()
+          else { gameRef.current = null; setGame(null); setError('') }
+        }}
+        onPause={game && game.status !== 'finished' ? () => void pauseGame() : undefined}
+        onAbandon={game && game.status !== 'finished' ? () => void abandonGame() : undefined}
+      />
       {error && <div className="error-banner" role="alert"><span>{error}</span><button onClick={() => setError('')} aria-label="Dismiss error">×</button></div>}
       {!game ? (
         <HomeScreen
