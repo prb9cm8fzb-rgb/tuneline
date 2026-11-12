@@ -12,7 +12,6 @@ declare global {
         activateElement: () => Promise<void>
         addListener: (event: string, callback: (data: { device_id?: string }) => void) => boolean
         pause: () => Promise<void>
-        resume: () => Promise<void>
         seek: (position: number) => Promise<void>
       }
     }
@@ -98,7 +97,6 @@ async function playOnBrowser(uri: string, startMs: number, activation?: Promise<
   })
   if (!play.ok) throw new Error(`Spotify could not start this track (${play.status}).`)
   currentPlaybackTarget = { kind: 'browser' }
-  await player.resume()
 }
 
 function loadSpotifySdk(): Promise<void> {
