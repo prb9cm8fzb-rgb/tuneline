@@ -6,7 +6,7 @@ function formatTime(seconds: number) {
   return `00:${String(seconds).padStart(2, '0')}`
 }
 
-export default function ListenScreen({ team, round, total, duration, secondsLeft, isPlaying, hasPlayed, onPlay, onContinue }: {
+export default function ListenScreen({ team, round, total, duration, secondsLeft, isPlaying, hasPlayed, playbackNotice, onPlay, onContinue }: {
   team: Team
   round: number
   total: number
@@ -14,6 +14,7 @@ export default function ListenScreen({ team, round, total, duration, secondsLeft
   secondsLeft: number
   isPlaying: boolean
   hasPlayed: boolean
+  playbackNotice: string
   onPlay: () => void
   onContinue: () => void
 }) {
@@ -23,6 +24,7 @@ export default function ListenScreen({ team, round, total, duration, secondsLeft
       <div className="listen-columns">
         <div className="listen-context"><span className="eyebrow">PLAYING</span><TeamBadge team={team} /></div>
         <div className="listen-player"><div className={`vinyl-mini ${isPlaying ? 'spinning' : ''}`}><span>♫</span></div><div className="waveform" aria-hidden="true">{Array.from({ length: 38 }, (_, index) => <i key={index} style={{ height: `${18 + ((index * 19) % 54)}%` }} />)}</div><div className="timer-row"><span>{formatTime(duration - secondsLeft)}</span><span>{formatTime(duration)}</span></div><div className="timer-track"><i style={{ width: `${((duration - secondsLeft) / duration) * 100}%` }} /></div>
+          {playbackNotice && <small className="playback-route">{playbackNotice}</small>}
           {!hasPlayed ? <PrimaryButton className="play-song-button" onClick={onPlay}>▶ &nbsp; PLAY SONG</PrimaryButton> : !isPlaying ? <PrimaryButton className="play-song-button" variant="secondary" onClick={onContinue}>CONTINUE TO ANSWERS <span>↗</span></PrimaryButton> : <div className="countdown">{secondsLeft}<small>SECONDS LEFT</small></div>}
         </div>
       </div>

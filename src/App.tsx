@@ -68,6 +68,7 @@ export default function App() {
   const [loadingSongs, setLoadingSongs] = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
   const [hasPlayed, setHasPlayed] = useState(false)
+  const [playbackNotice, setPlaybackNotice] = useState('')
   const [secondsLeft, setSecondsLeft] = useState(20)
   const [answerChoices, setAnswerChoices] = useState<{ artist: boolean | null; title: boolean | null }>({ artist: null, title: null })
   const [error, setError] = useState('')
@@ -211,15 +212,20 @@ export default function App() {
   const startListening = async () => {
     if (!game || !activeSong) return
     setSecondsLeft(game.settings.fragmentDuration)
-    setIsPlaying(true)
-    setHasPlayed(true)
+    setPlaybackNotice('')
     setError('')
     try {
       if (activeSong.spotifyUri) {
-        await playSpotifyFragment(activeSong.spotifyUri, activeSong.fragmentStartMs, game.settings.fragmentDuration)
+        const route = await playSpotifyFragment(activeSong.spotifyUri, activeSong.fragmentStartMs)
+        setPlaybackNotice(route.kind === 'connect'
+          ? `Playing on Spotify Connect: ${route.deviceName}`
+          : 'No Spotify Connect device found. Playing in the TuneLine browser.')
       }
+      setIsPlaying(true)
+      setHasPlayed(true)
     } catch (reason) {
       setIsPlaying(false)
+      setHasPlayed(false)
       setError(reason instanceof Error ? reason.message : 'Spotify playback could not start.')
       return
     }
@@ -377,7 +383,7 @@ export default function App() {
                 round={game.currentRoundNumber}
                 total={game.settings.songsPerTeam}
                 duration={game.settings.fragmentDuration}
-                onReady={() => { setSecondsLeft(game.settings.fragmentDuration); setHasPlayed(false); setIsPlaying(false); updateGame((current) => ({ ...current, phase: 'listen' })) }}
+                onReady={() => { setSecondsLeft(game.settings.fragmentDuration); setHasPlayed(false); setIsPlaying(false); setPlaybackNotice(''); updateGame((current) => ({ ...current, phase: 'listen' })) }}
               />
             )}
             {game.phase === 'listen' && currentTeam && (
@@ -389,6 +395,7 @@ export default function App() {
                 secondsLeft={secondsLeft}
                 isPlaying={isPlaying}
                 hasPlayed={hasPlayed}
+                playbackNotice={playbackNotice}
                 onPlay={() => void startListening()}
                 onContinue={() => updateGame((current) => ({ ...current, phase: 'answer' }))}
               />

@@ -173,6 +173,7 @@
 .timer-track { height: 2px; width: 100%; background: #41433a; margin-top: 8px; }
 .timer-track i { display: block; height: 100%; background: var(--lime); transition: width 1s linear; }
 .play-song-button { width: 100%; margin-top: 20px; }
+.playback-route { margin-top: 9px; color: var(--muted); font-size: 8px; text-align: center; }
 .countdown { color: var(--lime); font-size: 28px; font-variant-numeric: tabular-nums; margin-top: 16px; }
 .countdown small { display: block; font-size: 7px; letter-spacing: 1.4px; color: var(--muted); }
 .answer-screen { width: min(660px, 100%); }

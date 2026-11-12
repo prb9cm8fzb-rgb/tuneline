@@ -26,6 +26,79 @@ let ready = false
 let currentDeviceId: string | null = null
 let sdkPromise: Promise<void> | null = null
 let initializationPromise: Promise<void> | null = null
+let currentPlaybackTarget: { kind: 'connect'; deviceId: string } | { kind: 'browser' } | null = null
+
+type SpotifyConnectDevice = {
+  id: string | null
+  name: string
+  type: string
+  is_active: boolean
+  is_restricted: boolean
+}
+
+export type SpotifyPlaybackRoute =
+  | { kind: 'connect'; deviceName: string }
+  | { kind: 'browser' }
+
+const spotifyApi = 'https://api.spotify.com/v1'
+
+async function getConnectDevice(): Promise<SpotifyConnectDevice | null> {
+  const token = await validSpotifyToken()
+  const response = await fetch(`${spotifyApi}/me/player/devices`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (response.status === 204) return null
+  if (!response.ok) throw new Error(`Could not check Spotify Connect devices (${response.status}).`)
+
+  const { devices } = await response.json() as { devices: SpotifyConnectDevice[] }
+  const available = devices.filter((device) =>
+    device.id && !device.is_restricted && device.name.toLowerCase() !== 'tuneline',
+  )
+  return available.find((device) => device.is_active) ?? (available.length === 1 ? available[0] : null)
+}
+
+async function waitForActiveDevice(deviceId: string, token: string) {
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const response = await fetch(`${spotifyApi}/me/player`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (response.status !== 204 && !response.ok) {
+      throw new Error(`Could not confirm the Spotify playback device (${response.status}).`)
+    }
+    if (response.ok) {
+      const state = await response.json() as { device?: { id?: string } }
+      if (state.device?.id === deviceId) return
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, 250))
+  }
+  throw new Error('Spotify did not switch to the selected Connect device.')
+}
+
+async function playOnBrowser(uri: string, startMs: number, activation?: Promise<{ error?: unknown }>) {
+  await initializeSpotifyPlayer()
+  if (!player || !currentDeviceId) throw new Error('Spotify player is not ready.')
+  if (activation) {
+    const result = await activation
+    if (result.error) throw result.error
+  } else {
+    await player.activateElement()
+  }
+
+  const token = await validSpotifyToken()
+  const transfer = await fetch(`${spotifyApi}/me/player`, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ device_ids: [currentDeviceId], play: false }),
+  })
+  if (!transfer.ok) throw new Error(`Could not select TuneLine as the Spotify player (${transfer.status}).`)
+  const play = await fetch(`${spotifyApi}/me/player/play?device_id=${encodeURIComponent(currentDeviceId)}`, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ uris: [uri], position_ms: startMs }),
+  })
+  if (!play.ok) throw new Error(`Spotify could not start this track (${play.status}).`)
+  currentPlaybackTarget = { kind: 'browser' }
+}
 
 function loadSpotifySdk(): Promise<void> {
   if (window.Spotify) return Promise.resolve()
@@ -74,28 +147,46 @@ export function initializeSpotifyPlayer(): Promise<void> {
   return initializationPromise
 }
 
-export async function playSpotifyFragment(uri: string, startMs: number, durationSeconds: number) {
-  const activation = player?.activateElement()
-  await initializeSpotifyPlayer()
-  if (!player || !currentDeviceId) throw new Error('Spotify player is not ready.')
-  if (activation) await activation
-  else await player.activateElement()
+export async function playSpotifyFragment(uri: string, startMs: number): Promise<SpotifyPlaybackRoute> {
+  const activation = player?.activateElement().then(
+    () => ({}),
+    (error: unknown) => ({ error }),
+  )
+  const device = await getConnectDevice()
+  if (!device?.id) {
+    await playOnBrowser(uri, startMs, activation)
+    return { kind: 'browser' }
+  }
+
   const token = await validSpotifyToken()
-  const transfer = await fetch('https://api.spotify.com/v1/me/player', {
+  const transfer = await fetch(`${spotifyApi}/me/player`, {
     method: 'PUT',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ device_ids: [currentDeviceId], play: false }),
+    body: JSON.stringify({ device_ids: [device.id], play: false }),
   })
-  if (!transfer.ok) throw new Error(`Could not select TuneLine as the Spotify player (${transfer.status}).`)
-  const play = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(currentDeviceId)}`, {
+  if (!transfer.ok) throw new Error(`Could not select ${device.name} as the Spotify player (${transfer.status}).`)
+  await waitForActiveDevice(device.id, token)
+  const play = await fetch(`${spotifyApi}/me/player/play?device_id=${encodeURIComponent(device.id)}`, {
     method: 'PUT',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ uris: [uri], position_ms: startMs }),
   })
   if (!play.ok) throw new Error(`Spotify could not start this track (${play.status}).`)
-  window.setTimeout(() => { void player?.pause() }, durationSeconds * 1000)
+  currentPlaybackTarget = { kind: 'connect', deviceId: device.id }
+  return { kind: 'connect', deviceName: device.name }
 }
 
 export async function pauseSpotify() {
+  if (currentPlaybackTarget?.kind === 'connect') {
+    const token = await validSpotifyToken()
+    const response = await fetch(`${spotifyApi}/me/player/pause?device_id=${encodeURIComponent(currentPlaybackTarget.deviceId)}`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!response.ok) throw new Error(`Could not pause Spotify Connect playback (${response.status}).`)
+    currentPlaybackTarget = null
+    return
+  }
   await player?.pause()
+  currentPlaybackTarget = null
 }
