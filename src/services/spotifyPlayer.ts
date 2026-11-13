@@ -79,6 +79,27 @@ async function waitForActiveDevice(deviceId: string, token: string) {
   throw new Error('Spotify did not switch to the selected Connect device.')
 }
 
+async function waitForTrackPlaying(deviceId: string, uri: string, token: string) {
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const response = await fetch(`${spotifyApi}/me/player`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (response.status !== 204 && !response.ok) {
+      throw new Error(`Could not confirm Spotify playback (${response.status}).`)
+    }
+    if (response.ok) {
+      const state = await response.json() as {
+        device?: { id?: string }
+        is_playing?: boolean
+        item?: { uri?: string } | null
+      }
+      if (state.device?.id === deviceId && state.is_playing && state.item?.uri === uri) return true
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, 250))
+  }
+  return false
+}
+
 async function playOnBrowser(uri: string, startMs: number, activation?: Promise<{ error?: unknown }>) {
   await initializeSpotifyPlayer()
   if (!player || !currentDeviceId) throw new Error('Spotify player is not ready.')
@@ -186,6 +207,10 @@ export async function playSpotifyFragment(uri: string, startMs: number): Promise
   })
   if (!play.ok) throw new Error(`Spotify could not start this track (${play.status}).`)
   currentPlaybackTarget = { kind: 'connect', deviceId: device.id }
+  if (!await waitForTrackPlaying(device.id, uri, token)) {
+    await playOnBrowser(uri, startMs, activation)
+    return { kind: 'browser' }
+  }
   return { kind: 'connect', deviceName: device.name }
 }
 
