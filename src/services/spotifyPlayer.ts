@@ -12,6 +12,7 @@ declare global {
         activateElement: () => Promise<void>
         addListener: (event: string, callback: (data: { device_id?: string }) => void) => boolean
         pause: () => Promise<void>
+        resume: () => Promise<void>
         seek: (position: number) => Promise<void>
       }
     }
@@ -40,6 +41,11 @@ export type SpotifyPlaybackRoute =
   | { kind: 'browser' }
 
 const spotifyApi = 'https://api.spotify.com/v1'
+
+function isIOSBrowser() {
+  return /iPhone|iPad|iPod/i.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+}
 
 async function getConnectDevice(): Promise<SpotifyConnectDevice | null> {
   const token = await validSpotifyToken()
@@ -97,6 +103,14 @@ async function playOnBrowser(uri: string, startMs: number, activation?: Promise<
   })
   if (!play.ok) throw new Error(`Spotify could not start this track (${play.status}).`)
   currentPlaybackTarget = { kind: 'browser' }
+  if (!isIOSBrowser()) {
+    try {
+      await player.resume()
+    } catch (reason) {
+      const detail = reason instanceof Error ? ` ${reason.message}` : ''
+      throw new Error(`Spotify started the track, but the browser could not resume audio.${detail} Try Play Song again or use a Spotify Connect device.`)
+    }
+  }
 }
 
 function loadSpotifySdk(): Promise<void> {
